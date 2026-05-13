@@ -117,20 +117,29 @@ with col_left:
     # ファイルアップロード
     st.markdown('<div class="section-title">スキャンデータ（STL）</div>', unsafe_allow_html=True)
 
-    st.markdown("**上顎**")
-    upper_before_file = st.file_uploader("初回スキャン", type=["stl"], key="ub",
-                                          label_visibility="visible")
-    upper_after_file  = st.file_uploader("経過後スキャン", type=["stl"], key="ua",
-                                          label_visibility="visible")
-
+    st.markdown("**初回スキャン**")
+    col_ub, col_lb = st.columns(2) if dual else (st.columns(1)[0], None)
+    with col_ub:
+        upper_before_file = st.file_uploader(
+            "上顎", type=["stl"], key="ub", label_visibility="visible")
     if dual:
-        st.markdown("**下顎**")
-        lower_before_file = st.file_uploader("初回スキャン", type=["stl"], key="lb",
-                                              label_visibility="visible")
-        lower_after_file  = st.file_uploader("経過後スキャン", type=["stl"], key="la",
-                                              label_visibility="visible")
+        with col_lb:
+            lower_before_file = st.file_uploader(
+                "下顎", type=["stl"], key="lb", label_visibility="visible")
     else:
-        lower_before_file = lower_after_file = None
+        lower_before_file = None
+
+    st.markdown("**経過後スキャン**")
+    col_ua, col_la = st.columns(2) if dual else (st.columns(1)[0], None)
+    with col_ua:
+        upper_after_file = st.file_uploader(
+            "上顎", type=["stl"], key="ua", label_visibility="visible")
+    if dual:
+        with col_la:
+            lower_after_file = st.file_uploader(
+                "下顎", type=["stl"], key="la", label_visibility="visible")
+    else:
+        lower_after_file = None
 
     # 実行ボタン
     st.markdown("")
