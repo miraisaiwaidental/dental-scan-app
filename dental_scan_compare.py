@@ -19,7 +19,7 @@ def print(*args, **kwargs):
 
 import numpy as np
 import trimesh
-import open3d as o3d
+import trimesh.registration
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -62,36 +62,18 @@ def center_mesh(mesh):
     return mesh
 
 
-def trimesh_to_o3d_pcd(mesh, n_points=20000):
-    pts = mesh.sample(n_points)
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pts)
-    pcd.estimate_normals(
-        o3d.geometry.KDTreeSearchParamKNN(knn=30)
-    )
-    return pcd
-
-
 def icp_register(source_mesh, target_mesh):
-    """ICPでsourceをtargetに位置合わせし、変換行列を返す"""
-    print("  位置合わせ（ICP）実行中...", flush=True)
-    src_pcd = trimesh_to_o3d_pcd(source_mesh)
-    tgt_pcd = trimesh_to_o3d_pcd(target_mesh)
-
-    # バウンディングボックス対角の2%をしきい値に
-    bbox = np.array(target_mesh.bounding_box.extents)
-    threshold = float(np.linalg.norm(bbox)) * 0.02
-
-    result = o3d.pipelines.registration.registration_icp(
-        src_pcd, tgt_pcd,
-        max_correspondence_distance=threshold,
-        estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(),
-        criteria=o3d.pipelines.registration.ICPConvergenceCriteria(
-            max_iteration=100
-        )
+    """trimesh内蔵ICPでsourceをtargetに位置合わせし、変換行列を返す"""
+    print("  位置合わせ（ICP）実行中...")
+    src_pts = source_mesh.sample(20000)
+    tgt_pts = target_mesh.sample(20000)
+    matrix, _, cost = trimesh.registration.icp(
+        src_pts, tgt_pts,
+        max_iterations=100,
+        threshold=1e-5
     )
-    print(f"  ICP RMSE: {result.inlier_rmse:.4f} mm")
-    return result.transformation
+    print(f"  ICP cost: {cost:.4f}")
+    return matrix
 
 
 def compute_vertex_distances(source_mesh, target_mesh):
