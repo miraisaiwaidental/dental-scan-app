@@ -23,18 +23,18 @@ import trimesh.registration
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
-
-# Windows日本語フォント設定
-_JP_FONTS = ["Meiryo", "Yu Gothic", "MS Gothic", "MS Mincho", "IPAexGothic"]
-_found_font = None
-for _f in _JP_FONTS:
-    if any(_f.lower() in p.name.lower() for p in fm.fontManager.ttflist):
-        _found_font = _f
-        break
-if _found_font:
-    matplotlib.rcParams['font.family'] = _found_font
 import matplotlib.cm as cm
+
+# 日本語フォント（Windows/Linux/Cloud 共通対応）
+try:
+    import japanize_matplotlib  # noqa: F401  Linux/Cloud用
+except ImportError:
+    import matplotlib.font_manager as fm
+    _JP_FONTS = ["Meiryo", "Yu Gothic", "MS Gothic", "MS Mincho"]
+    for _f in _JP_FONTS:
+        if any(_f.lower() in p.name.lower() for p in fm.fontManager.ttflist):
+            matplotlib.rcParams['font.family'] = _f
+            break
 from matplotlib.colors import Normalize, LinearSegmentedColormap
 from scipy.spatial import KDTree
 
