@@ -7,6 +7,7 @@ import streamlit as st
 import tempfile
 import os
 import sys
+import zipfile
 from pathlib import Path
 
 # ── ページ設定 ─────────────────────────────────────────
@@ -98,15 +99,6 @@ st.markdown("---")
 col_left, col_right = st.columns([1, 2])
 
 with col_left:
-    # モード選択
-    st.markdown('<div class="section-title">モード</div>', unsafe_allow_html=True)
-    mode = st.radio(
-        label="",
-        options=["上顎 + 下顎（統合レポート）", "上顎のみ"],
-        label_visibility="collapsed"
-    )
-    dual = (mode == "上顎 + 下顎（統合レポート）")
-
     # 患者情報
     st.markdown('<div class="section-title">患者情報</div>', unsafe_allow_html=True)
     patient_name = st.text_input("患者名", placeholder="例：山田太郎（匿名推奨）")
@@ -116,32 +108,22 @@ with col_left:
     with col_d2:
         date_after = st.text_input("経過後日付", value="2025-01", placeholder="2025-01")
 
-    # ファイルアップロード
-    st.markdown('<div class="section-title">スキャンデータ（STL）</div>', unsafe_allow_html=True)
+    # ファイルアップロード（ZIP or STL）
+    st.markdown('<div class="section-title">スキャンデータ</div>', unsafe_allow_html=True)
 
     st.markdown("**初回スキャン**")
-    col_ub, col_lb = st.columns(2) if dual else (st.columns(1)[0], None)
-    with col_ub:
-        upper_before_file = st.file_uploader(
-            "上顎", type=["stl"], key="ub", label_visibility="visible")
-    if dual:
-        with col_lb:
-            lower_before_file = st.file_uploader(
-                "下顎", type=["stl"], key="lb", label_visibility="visible")
-    else:
-        lower_before_file = None
+    before_zip = st.file_uploader(
+        "ZIPファイル（WESCAN書き出し）またはSTLファイル",
+        type=["zip", "stl"], key="before",
+        label_visibility="visible"
+    )
 
     st.markdown("**経過後スキャン**")
-    col_ua, col_la = st.columns(2) if dual else (st.columns(1)[0], None)
-    with col_ua:
-        upper_after_file = st.file_uploader(
-            "上顎", type=["stl"], key="ua", label_visibility="visible")
-    if dual:
-        with col_la:
-            lower_after_file = st.file_uploader(
-                "下顎", type=["stl"], key="la", label_visibility="visible")
-    else:
-        lower_after_file = None
+    after_zip = st.file_uploader(
+        "ZIPファイル（WESCAN書き出し）またはSTLファイル",
+        type=["zip", "stl"], key="after",
+        label_visibility="visible"
+    )
 
     # 実行ボタン
     st.markdown("")
@@ -152,53 +134,71 @@ with col_right:
     st.markdown('<div class="section-title">分析結果</div>', unsafe_allow_html=True)
 
     if run_btn:
-        # バリデーション
-        errors = []
-        if not upper_before_file: errors.append("上顎 初回スキャン が未アップロードです")
-        if not upper_after_file:  errors.append("上顎 経過後スキャン が未アップロードです")
-        if dual:
-            if not lower_before_file: errors.append("下顎 初回スキャン が未アップロードです")
-            if not lower_after_file:  errors.append("下顎 経過後スキャン が未アップロードです")
-
-        if errors:
-            for e in errors:
-                st.error(e)
+        if not before_zip or not after_zip:
+            st.error("初回・経過後の両方のファイルをアップロードしてください")
         else:
-            # 一時ファイルに保存して処理
             with tempfile.TemporaryDirectory() as tmpdir:
-                def save_tmp(f, name):
-                    p = os.path.join(tmpdir, name)
-                    with open(p, "wb") as fp:
-                        fp.write(f.read())
-                    return p
 
-                ub_path = save_tmp(upper_before_file, "upper_before.stl")
-                ua_path = save_tmp(upper_after_file,  "upper_after.stl")
+                def extract_stls(uploaded_file, prefix):
+                    """ZIP or STL を受け取り、{upper, lower} のパスdictを返す"""
+                    found = {}
+                    if uploaded_file.name.lower().endswith(".zip"):
+                        zip_path = os.path.join(tmpdir, f"{prefix}.zip")
+                        with open(zip_path, "wb") as fp:
+                            fp.write(uploaded_file.read())
+                        with zipfile.ZipFile(zip_path, "r") as zf:
+                            for name in zf.namelist():
+                                base = os.path.basename(name).lower()
+                                for key in ("upper", "lower", "bite0", "bite1"):
+                                    if base == f"{key}.stl":
+                                        out_path = os.path.join(tmpdir, f"{prefix}_{key}.stl")
+                                        with zf.open(name) as src, open(out_path, "wb") as dst:
+                                            dst.write(src.read())
+                                        found[key] = out_path
+                    else:
+                        # 単体STLファイル → upper として扱う
+                        out_path = os.path.join(tmpdir, f"{prefix}_upper.stl")
+                        with open(out_path, "wb") as fp:
+                            fp.write(uploaded_file.read())
+                        found["upper"] = out_path
+                    return found
 
-                if dual:
-                    lb_path = save_tmp(lower_before_file, "lower_before.stl")
-                    la_path = save_tmp(lower_after_file,  "lower_after.stl")
+                before_stls = extract_stls(before_zip, "before")
+                after_stls  = extract_stls(after_zip,  "after")
+
+                # 検出されたファイルを表示
+                def stl_badge(d):
+                    keys = sorted(d.keys())
+                    return "  ".join([f"✅ {k}" for k in keys])
+                st.info(f"初回: {stl_badge(before_stls)}　　経過後: {stl_badge(after_stls)}")
+
+                # モード自動判定
+                has_upper = "upper" in before_stls and "upper" in after_stls
+                has_lower = "lower" in before_stls and "lower" in after_stls
+                dual = has_upper and has_lower
+
+                if not has_upper:
+                    st.error("upper.stl が見つかりません。ZIPの内容を確認してください。")
+                    st.stop()
 
                 pname = patient_name.strip() or "患者"
                 db    = date_before.strip() or "初回"
                 da    = date_after.strip() or "経過後"
 
-                # 処理実行
                 progress = st.progress(0, text="処理中...")
                 status   = st.empty()
 
                 try:
                     sys.path.insert(0, str(Path(__file__).parent))
-                    from dental_scan_compare import (
-                        generate_report, generate_dual_report
-                    )
+                    from dental_scan_compare import generate_report, generate_dual_report
 
                     status.info("STLデータを読み込み・位置合わせ中...")
                     progress.progress(20)
 
                     if dual:
                         out = generate_dual_report(
-                            ub_path, ua_path, lb_path, la_path,
+                            before_stls["upper"], after_stls["upper"],
+                            before_stls["lower"], after_stls["lower"],
                             output_dir=tmpdir,
                             patient_name=pname,
                             date_before=db,
@@ -206,7 +206,7 @@ with col_right:
                         )
                     else:
                         out = generate_report(
-                            ub_path, ua_path,
+                            before_stls["upper"], after_stls["upper"],
                             output_dir=tmpdir,
                             patient_name=pname,
                             date_before=db,
@@ -214,18 +214,15 @@ with col_right:
                         )
 
                     progress.progress(100, text="完了！")
-                    status.success("分析が完了しました")
+                    status.success(f"分析完了（{'上顎+下顎' if dual else '上顎のみ'}）")
 
-                    # 結果画像表示
                     st.image(out, use_column_width=True)
 
-                    # ダウンロードボタン
                     with open(out, "rb") as f:
-                        fname = os.path.basename(out)
                         st.download_button(
                             label="📥  レポート画像をダウンロード",
                             data=f,
-                            file_name=fname,
+                            file_name=os.path.basename(out),
                             mime="image/png"
                         )
 
