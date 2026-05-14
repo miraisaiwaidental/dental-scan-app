@@ -78,8 +78,10 @@ if not st.session_state.authenticated:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("### ログイン")
-        pw = st.text_input("パスワード", type="password", placeholder="パスワードを入力")
-        if st.button("ログイン"):
+        with st.form("login_form"):
+            pw = st.text_input("パスワード", type="password", placeholder="パスワードを入力")
+            submitted = st.form_submit_button("ログイン", use_container_width=True)
+        if submitted:
             if pw == APP_PASSWORD:
                 st.session_state.authenticated = True
                 st.rerun()
