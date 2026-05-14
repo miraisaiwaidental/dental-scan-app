@@ -22,14 +22,16 @@ import trimesh
 import trimesh.registration
 import matplotlib
 matplotlib.use('Agg')
+import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-# 日本語フォント（Windows/Linux/Cloud 共通対応）
-try:
-    import japanize_matplotlib  # noqa: F401  Linux/Cloud用
-except ImportError:
-    import matplotlib.font_manager as fm
+# 日本語フォント設定（リポジトリ内フォント → Windowsフォント の順で試みる）
+_FONT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "NotoSansJP.ttf")
+if os.path.exists(_FONT_FILE):
+    fm.fontManager.addfont(_FONT_FILE)
+    matplotlib.rcParams['font.family'] = fm.FontProperties(fname=_FONT_FILE).get_name()
+else:
     _JP_FONTS = ["Meiryo", "Yu Gothic", "MS Gothic", "MS Mincho"]
     for _f in _JP_FONTS:
         if any(_f.lower() in p.name.lower() for p in fm.fontManager.ttflist):
